@@ -5,14 +5,17 @@ Ripple is a full-stack Reddit-inspired community platform built with the MERN st
 ### Features
 - 🔐 Authentication with JWT (sign up, login, logout, profile bootstrap)
 - 📰 Post creation with topics, rich descriptions, optional cover images, and real-time voting
-- 💬 Nested comments with reply chains and independent vote tracking
+- 💬 Nested comments with reply chains, independent vote tracking, and AI-powered reply drafting
 - 🔥 Feed sorting (Hot, New, Top) plus text-based search and trending topic highlights
+- 🤖 Starforge AI composer with per-plan quotas and quota tracking
+- 💎 Stars currency, membership tiers (Explorer, Star Pass, Star Federation), and Razorpay checkout flows
+- 🛒 Billing hub to buy Stars, upgrade memberships, and track perks
 - 🎨 Responsive, polished UI built with React, Vite, TailwindCSS, and React Query
 
 ### Tech Stack
-- **Frontend:** Vite + React 19, React Router, React Query, TailwindCSS, Day.js, React Hot Toast
-- **Backend:** Node, Express 5, MongoDB with Mongoose, JWT auth, bcrypt, CORS, Morgan
-- **Tooling:** Nodemon for dev server, ESLint, modern ES modules end-to-end
+- **Frontend:** Vite + React 19 with TypeScript, React Router, React Query, TailwindCSS, Day.js, React Hot Toast
+- **Backend:** Node, Express 5 with TypeScript, MongoDB with Mongoose, JWT auth, bcrypt, CORS, Morgan
+- **Tooling:** ts-node-dev for live reload, ESLint, modern ES modules end-to-end
 
 ---
 
@@ -48,6 +51,10 @@ PORT=4000
 MONGO_URI=mongodb://localhost:27017/ripple
 JWT_SECRET=super-secret-key-change-me
 CLIENT_URL=http://localhost:5173
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+OPENAI_API_KEY=sk-your-openai-key (optional – enables live Starforge drafts)
 ```
 
 `frontend/.env`
@@ -103,6 +110,11 @@ first/
 - `POST /api/posts/:postId/vote` — upvote/downvote
 - `GET /api/posts/:postId/comments` — fetch nested comments
 - `POST /api/posts/:postId/comments` — create comment or reply
+- `GET /api/billing/meta` — retrieve membership plans and star packs
+- `POST /api/billing/stars/checkout` — start a Razorpay order for Stars
+- `POST /api/billing/membership/checkout` — upgrade membership tier via Razorpay
+- `POST /api/billing/verify` — verify Razorpay signatures client-side
+- `POST /api/ai/compose` — Starforge AI post generator (counts against quota)
 
 All protected routes use `Authorization: Bearer <token>` headers.
 
