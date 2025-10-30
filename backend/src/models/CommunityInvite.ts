@@ -51,7 +51,6 @@ const communityInviteSchema = new Schema<ICommunityInviteDocument>(
   },
 );
 
-communityInviteSchema.index({ code: 1 });
 communityInviteSchema.index({ community: 1, revoked: 1 });
 
 const CommunityInvite = model<ICommunityInviteDocument>('CommunityInvite', communityInviteSchema);

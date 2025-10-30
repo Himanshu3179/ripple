@@ -65,8 +65,6 @@ const communitySchema = new Schema<ICommunityDocument>(
   },
 );
 
-communitySchema.index({ slug: 1 });
-
 const Community = model<ICommunityDocument>('Community', communitySchema);
 
 export default Community;
