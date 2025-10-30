@@ -29,6 +29,7 @@ export interface IUser {
     used: number;
     renewsAt: Date;
   };
+  role?: 'user' | 'admin';
   referral?: {
     code: string;
     invitedCount: number;
@@ -97,6 +98,11 @@ const userSchema = new Schema<IUserDocument>(
     membershipExpiresAt: {
       type: Date,
       default: null,
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
     },
     aiPostQuota: {
       limit: {

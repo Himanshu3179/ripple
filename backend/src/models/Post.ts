@@ -6,6 +6,7 @@ export interface IPost {
   topic: string;
   imageUrl?: string;
   author: Types.ObjectId;
+  community?: Types.ObjectId | null;
   upvotes: Types.ObjectId[];
   downvotes: Types.ObjectId[];
   commentCount: number;
@@ -84,6 +85,11 @@ const postSchema = new Schema<IPostDocument>(
       ref: 'User',
       required: true,
     },
+    community: {
+      type: Schema.Types.ObjectId,
+      ref: 'Community',
+      default: null,
+    },
     upvotes: [
       {
         type: Schema.Types.ObjectId,
@@ -115,6 +121,8 @@ const postSchema = new Schema<IPostDocument>(
     toObject: { virtuals: true },
   },
 );
+
+postSchema.index({ community: 1, createdAt: -1 });
 
 postSchema.virtual('score').get(function score(this: IPostDocument) {
   return this.upvotes.length - this.downvotes.length;

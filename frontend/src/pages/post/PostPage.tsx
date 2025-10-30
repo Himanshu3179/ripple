@@ -10,6 +10,10 @@ import CommentThread from '../../components/comments/CommentThread';
 import dayjs from '../../utils/date';
 import api from '../../lib/api';
 import type { CommentResource, PostResource } from '../../types';
+import BoostButton from '../../components/economy/BoostButton';
+import TipButton from '../../components/economy/TipButton';
+import ReportButton from '../../components/common/ReportButton';
+import useAuth from '../../hooks/useAuth';
 
 const PostPage = () => {
   const params = useParams<{ postId?: string }>();
@@ -47,6 +51,7 @@ const PostPage = () => {
   const post = postData;
   const comments = commentsData || [];
   const shouldShowSkeleton = postLoading && !post;
+  const { isAuthenticated } = useAuth();
 
   const readingTime = useMemo(() => {
     if (!post?.body) {
@@ -110,6 +115,14 @@ const PostPage = () => {
               <p className="text-xs text-slate-400">
                 @{post.author?.username} · {dayjs(post.createdAt).format('MMM D, YYYY • h:mm A')}
               </p>
+              {post.community && (
+                <Link
+                  to={`/communities/${post.community.slug}`}
+                  className="mt-1 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:bg-brand-50 hover:text-brand-600"
+                >
+                  #{post.community.slug}
+                </Link>
+              )}
             </div>
           </div>
 
@@ -118,6 +131,14 @@ const PostPage = () => {
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase text-slate-500">
               {readingTime} min read
             </span>
+            {post.community && (
+              <Link
+                to={`/communities/${post.community.slug}`}
+                className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600"
+              >
+                #{post.community.slug}
+              </Link>
+            )}
           </div>
 
           <h1 className="text-3xl font-bold leading-tight text-slate-900 md:text-4xl">{post.title}</h1>
@@ -143,6 +164,13 @@ const PostPage = () => {
             <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500">
               {post.commentCount} comments
             </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <BoostButton postId={post.id} />
+            {isAuthenticated && post.author?.id && post.author.id !== undefined && (
+              <TipButton recipientId={post.author.id} postId={post.id} />
+            )}
+            <ReportButton targetType="post" targetId={post.id} />
           </div>
         </div>
       </article>

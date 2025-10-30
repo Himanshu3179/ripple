@@ -7,12 +7,14 @@ import clsx from 'clsx';
 import useAuth from '../../hooks/useAuth';
 import api from '../../lib/api';
 import type { PostResource } from '../../types';
+import { useMyCommunities } from '../../hooks/useCommunities';
 
 interface CreatePostPayload {
   title: string;
   topic: string;
   body: string;
   imageUrl: string;
+  communityId?: string;
 }
 
 interface PostComposerFormProps {
@@ -20,6 +22,7 @@ interface PostComposerFormProps {
   initialTitle?: string;
   initialBody?: string;
   initialTopic?: string;
+  seedCommunity?: string;
 }
 
 const PostComposerForm = ({
@@ -27,19 +30,31 @@ const PostComposerForm = ({
   initialTitle = '',
   initialBody = '',
   initialTopic = '',
+  seedCommunity,
 }: PostComposerFormProps) => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const { data: communities } = useMyCommunities();
   const [title, setTitle] = useState(initialTitle);
   const [topic, setTopic] = useState(initialTopic);
   const [body, setBody] = useState(initialBody);
   const [imageUrl, setImageUrl] = useState('');
+  const [communityId, setCommunityId] = useState<string>('');
 
   useEffect(() => {
     setTitle(initialTitle);
     setTopic(initialTopic);
     setBody(initialBody);
   }, [initialTitle, initialBody, initialTopic]);
+
+  useEffect(() => {
+    if (seedCommunity && communities) {
+      const match = communities.find((community) => community.slug === seedCommunity || community.id === seedCommunity);
+      if (match) {
+        setCommunityId(match.id);
+      }
+    }
+  }, [seedCommunity, communities]);
 
   const isFormValid = title.trim().length >= 3 && topic.trim().length >= 2;
 
@@ -74,6 +89,7 @@ const PostComposerForm = ({
       topic: topic.trim(),
       body: body.trim(),
       imageUrl: imageUrl.trim(),
+      communityId: communityId || undefined,
     });
   };
 
@@ -119,6 +135,25 @@ const PostComposerForm = ({
           className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-400 focus:bg-white focus:shadow-input"
         />
       </div>
+
+
+      {communities && (
+        <div>
+          <label className="text-sm font-semibold text-slate-600">Community</label>
+          <select
+            value={communityId}
+            onChange={(event) => setCommunityId(event.target.value)}
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-400 focus:bg-white focus:shadow-input"
+          >
+            <option value="">Personal feed</option>
+            {communities.map((community) => (
+              <option key={community.id} value={community.id}>
+                {community.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label htmlFor="title" className="text-sm font-semibold text-slate-600">

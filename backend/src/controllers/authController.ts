@@ -19,6 +19,7 @@ export interface AuthenticatedUser {
     used: number;
     renewsAt: Date;
   } | null;
+  role: 'user' | 'admin';
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,6 +49,7 @@ const formatUser = (userDoc: IUserDocument): AuthenticatedUser => {
           renewsAt: user.aiPostQuota.renewsAt,
         }
       : null,
+    role: user.role || 'user',
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

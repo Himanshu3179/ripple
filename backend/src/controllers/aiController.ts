@@ -3,6 +3,7 @@ import User from '../models/User';
 import { composePost } from '../services/aiComposerService';
 import { adjustStars } from '../services/starService';
 import { STARFORGE_EXTRA_DRAFT_COST } from '../config/economy';
+import { recordMissionProgress } from '../services/missionService';
 
 const ensureQuota = (limit: number, used: number) => {
   if (limit < 0) {
@@ -96,6 +97,8 @@ export const generatePost = async (req: Request, res: Response, next: NextFuncti
     }
     user.aiPostQuota = quota;
     await user.save();
+
+    await recordMissionProgress(user._id.toString(), 'starforge');
 
     res.status(200).json({
       title: result.title,

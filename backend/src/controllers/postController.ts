@@ -2,6 +2,17 @@ import { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import Post, { IPostDocument } from '../models/Post';
 import Comment from '../models/Comment';
+import Community, { ICommunityDocument } from '../models/Community';
+import {
+  ensureActiveMembership,
+  isCommunityAccessible,
+  loadMembershipMap,
+  toCommunitySummary,
+  CommunitySummary,
+} from '../services/communityAccess';
+import CommunitySettings from '../models/CommunitySettings';
+import { recordMissionProgress } from '../services/missionService';
+import { checkSpamSubmission } from '../services/spamService';
 
 interface SerializedAuthor {
   id: string;
@@ -23,6 +34,12 @@ export interface SerializedPost {
   createdAt?: Date;
   updatedAt?: Date;
   author: SerializedAuthor | null;
+  community: {
+    id: string;
+    name: string;
+    slug: string;
+    visibility: string;
+  } | null;
   viewerVote?: number;
 }
 
@@ -72,6 +89,14 @@ const serializePost = (postDoc: IPostDocument, viewerVote?: number): SerializedP
           avatarColor: post.author.avatarColor,
         }
       : null,
+    community: post.community
+      ? {
+          id: post.community._id.toString(),
+          name: post.community.name,
+          slug: post.community.slug,
+          visibility: post.community.visibility,
+        }
+      : null,
     viewerVote,
   };
 };
@@ -83,10 +108,50 @@ export const createPost = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const { title, body, topic, imageUrl } = req.body as Record<string, string>;
+    const { title, body, topic, imageUrl, communityId } = req.body as Record<string, string>;
 
     if (!title || !topic) {
       res.status(400).json({ message: 'Title and topic are required' });
+      return;
+    }
+
+    let community: ICommunityDocument | null = null;
+    if (communityId) {
+      const query = Types.ObjectId.isValid(communityId)
+        ? { _id: communityId }
+        : { slug: communityId.toLowerCase() };
+      community = await Community.findOne(query);
+
+      if (!community) {
+        res.status(404).json({ message: 'Community not found' });
+        return;
+      }
+
+      const membership = await ensureActiveMembership(community._id, req.user._id);
+
+      if (!membership) {
+        res.status(403).json({ message: 'You must be an active member to post here' });
+        return;
+      }
+
+      const settings = await CommunitySettings.findOne({ community: community._id }).lean();
+      if (settings?.bannedKeywords?.length) {
+        const normalized = `${title} ${body}`.toLowerCase();
+        if (settings.bannedKeywords.some((word) => normalized.includes(word.toLowerCase()))) {
+          res.status(400).json({ message: 'Post contains banned keywords for this community' });
+          return;
+        }
+      }
+    }
+
+    const spamCheck = checkSpamSubmission({
+      type: 'post',
+      userId: req.user._id.toString(),
+      content: `${title} ${body ?? ''}`,
+    });
+
+    if (!spamCheck.allowed) {
+      res.status(429).json({ message: spamCheck.message });
       return;
     }
 
@@ -96,9 +161,13 @@ export const createPost = async (req: Request, res: Response, next: NextFunction
       topic: topic.trim().toLowerCase(),
       imageUrl: imageUrl || '',
       author: req.user._id,
+      community: community ? community._id : null,
     });
 
     await post.populate('author', 'username displayName avatarColor');
+    await post.populate('community', 'name slug visibility');
+
+    await recordMissionProgress(req.user._id.toString(), 'post');
 
     res.status(201).json({ post: serializePost(post, 0) });
   } catch (error) {
@@ -108,8 +177,10 @@ export const createPost = async (req: Request, res: Response, next: NextFunction
 
 export const getPosts = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { topic, author, sort = 'new', q } = req.query as Record<string, string | undefined>;
+    const { topic, author, sort = 'new', q, community: communityParam } =
+      req.query as Record<string, string | undefined>;
     const filter: Record<string, unknown> = {};
+    let targetCommunity: ICommunityDocument | null = null;
 
     if (topic) {
       filter.topic = topic.toLowerCase();
@@ -117,6 +188,20 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction) 
 
     if (author && Types.ObjectId.isValid(author)) {
       filter.author = author;
+    }
+
+    if (communityParam) {
+      const query = Types.ObjectId.isValid(communityParam)
+        ? { _id: communityParam }
+        : { slug: communityParam.toLowerCase() };
+      targetCommunity = await Community.findOne(query);
+
+      if (!targetCommunity) {
+        res.status(404).json({ message: 'Community not found' });
+        return;
+      }
+
+      filter.community = targetCommunity._id;
     }
 
     const searchTerm = q?.trim();
@@ -129,6 +214,7 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction) 
 
     let posts = await Post.find(filter)
       .populate('author', 'username displayName avatarColor')
+      .populate('community', 'name slug visibility')
       .sort({ createdAt: -1 })
       .limit(50)
       .exec();
@@ -162,6 +248,25 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction) 
 
     const viewerId = req.user?._id?.toString();
 
+    const communityIds = posts
+      .map((post) => toCommunitySummary(post.community))
+      .filter((summary): summary is CommunitySummary => Boolean(summary))
+      .map((summary) => summary._id.toString());
+
+    const membershipMap = await loadMembershipMap(Array.from(new Set(communityIds)), viewerId);
+
+    const targetCommunitySummary = toCommunitySummary(targetCommunity);
+    if (targetCommunitySummary) {
+      if (!isCommunityAccessible(targetCommunitySummary, membershipMap, viewerId)) {
+        res.status(403).json({ message: 'You do not have access to this community' });
+        return;
+      }
+    }
+
+    posts = posts.filter((post) =>
+      isCommunityAccessible(toCommunitySummary(post.community), membershipMap, viewerId),
+    );
+
     posts = posts.sort((a, b) => {
       const boostA = a.boostedUntil && a.boostedUntil > now ? a.boostScore ?? 0 : 0;
       const boostB = b.boostedUntil && b.boostedUntil > now ? b.boostScore ?? 0 : 0;
@@ -186,7 +291,9 @@ export const getPostById = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const post = await Post.findById(postId).populate('author', 'username displayName avatarColor');
+    const post = await Post.findById(postId)
+      .populate('author', 'username displayName avatarColor')
+      .populate('community', 'name slug visibility');
 
     if (!post) {
       res.status(404).json({ message: 'Post not found' });
@@ -194,6 +301,17 @@ export const getPostById = async (req: Request, res: Response, next: NextFunctio
     }
 
     const viewerId = req.user?._id?.toString();
+    const communitySummary = toCommunitySummary(post.community);
+    const membershipMap = await loadMembershipMap(
+      communitySummary ? [communitySummary._id.toString()] : [],
+      viewerId,
+    );
+
+    if (!isCommunityAccessible(communitySummary, membershipMap, viewerId)) {
+      res.status(403).json({ message: 'You do not have access to this post' });
+      return;
+    }
+
     const viewerVote = determineViewerVote(post, viewerId);
 
     res.status(200).json({ post: serializePost(post, viewerVote) });
@@ -244,6 +362,7 @@ export const updatePost = async (req: Request, res: Response, next: NextFunction
 
     await post.save();
     await post.populate('author', 'username displayName avatarColor');
+    await post.populate('community', 'name slug visibility');
 
     res.status(200).json({ post: serializePost(post) });
   } catch (error) {
@@ -306,10 +425,21 @@ export const votePost = async (req: Request, res: Response, next: NextFunction) 
       return;
     }
 
-    const post = await Post.findById(postId).populate('author', 'username displayName avatarColor');
+    const post = await Post.findById(postId)
+      .populate('author', 'username displayName avatarColor')
+      .populate('community', 'name slug visibility');
 
     if (!post) {
       res.status(404).json({ message: 'Post not found' });
+      return;
+    }
+
+    const membershipMap = await loadMembershipMap(
+      post.community ? [post.community._id.toString()] : [],
+      req.user._id.toString(),
+    );
+    if (!isCommunityAccessible(toCommunitySummary(post.community), membershipMap, req.user._id.toString())) {
+      res.status(403).json({ message: 'You do not have access to interact with this post' });
       return;
     }
 

@@ -8,6 +8,7 @@ import PostCard from '../../components/post/PostCard';
 import api from '../../lib/api';
 import useAuth from '../../hooks/useAuth';
 import type { PostResource } from '../../types';
+import { useMyCommunities } from '../../hooks/useCommunities';
 
 const LoadingPlaceholder = () => (
   <div className="animate-pulse space-y-6">
@@ -51,6 +52,7 @@ const HomePage = () => {
   const sort = searchParams.get('sort') || 'hot';
   const topic = searchParams.get('topic') || '';
   const query = searchParams.get('q') || '';
+  const community = searchParams.get('community') || '';
   const { isAuthenticated } = useAuth();
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [seedTopic, setSeedTopic] = useState('');
@@ -65,12 +67,13 @@ const HomePage = () => {
   }, []);
 
   const { data, isLoading } = useQuery<PostResource[]>({
-    queryKey: ['posts', { sort, topic, query }],
+    queryKey: ['posts', { sort, topic, query, community }],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('sort', sort);
       if (topic) params.set('topic', topic);
       if (query) params.set('q', query);
+      if (community) params.set('community', community);
       const search = params.toString();
       const endpoint = search ? `/posts?${search}` : '/posts';
       const { data: response } = await api.get<{ posts: PostResource[] }>(endpoint);
@@ -79,6 +82,7 @@ const HomePage = () => {
   });
 
   const posts = data || [];
+  const { data: communities } = useMyCommunities(isAuthenticated);
 
   const trendingTopics = useMemo(() => {
     const topicMap = new Map<string, number>();
@@ -125,6 +129,48 @@ const HomePage = () => {
               You need an account to publish posts. Sign in to get started.
             </p>
           )}
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Community</label>
+              <select
+                value={community}
+                onChange={(event) => {
+                  const params = new URLSearchParams(window.location.search);
+                  if (event.target.value) {
+                    params.set('community', event.target.value);
+                  } else {
+                    params.delete('community');
+                  }
+                  navigate({ pathname: '/', search: params.toString() });
+                }}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              >
+                <option value="">Global feed</option>
+                {communities?.map((communityOption) => (
+                  <option key={communityOption.id} value={communityOption.slug}>
+                    {communityOption.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Topic</label>
+              <input
+                value={topic}
+                onChange={(event) => {
+                  const params = new URLSearchParams(window.location.search);
+                  if (event.target.value) {
+                    params.set('topic', event.target.value);
+                  } else {
+                    params.delete('topic');
+                  }
+                  navigate({ pathname: '/', search: params.toString() });
+                }}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Filter by topic"
+              />
+            </div>
+          </div>
         </div>
         {isLoading && <LoadingPlaceholder />}
         {!isLoading && posts.length === 0 && <EmptyState query={query} />}
@@ -204,6 +250,7 @@ const HomePage = () => {
         open={isComposerOpen}
         onClose={() => setComposerOpen(false)}
         seedTopic={seedTopic}
+        seedCommunity={community || undefined}
       />
     </div>
   );

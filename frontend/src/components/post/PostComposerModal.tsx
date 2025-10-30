@@ -8,9 +8,10 @@ interface PostComposerModalProps {
   open: boolean;
   onClose: () => void;
   seedTopic?: string;
+  seedCommunity?: string;
 }
 
-const PostComposerModal = ({ open, onClose, seedTopic }: PostComposerModalProps) => {
+const PostComposerModal = ({ open, onClose, seedTopic, seedCommunity }: PostComposerModalProps) => {
   const [isAiComposerOpen, setAiComposerOpen] = useState(false);
   const [prefill, setPrefill] = useState({ title: '', body: '', topic: '' });
 
@@ -55,6 +56,7 @@ const PostComposerModal = ({ open, onClose, seedTopic }: PostComposerModalProps)
           initialTitle={prefill.title}
           initialBody={prefill.body}
           initialTopic={prefill.topic}
+          seedCommunity={seedCommunity}
         />
       </Modal>
       <AiComposerModal

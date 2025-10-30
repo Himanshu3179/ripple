@@ -1,5 +1,3 @@
-import fetch from 'node-fetch';
-
 const { OPENAI_API_KEY, OPENAI_MODEL = 'gpt-4o-mini' } = process.env;
 
 export interface AiComposeOptions {

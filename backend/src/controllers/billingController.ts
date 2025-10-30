@@ -251,12 +251,14 @@ const applyTransactionEffects = async (
           renewsAt,
         };
       }
-        const starsBonus = transaction.starsAwarded ?? 0;
-        if (starsBonus > 0) {
-          const updated = await adjustStars(
-            user._id.toString(),
-            starsBonus,
-            'membership',
+      user.settings = user.settings || { hideAds: false, theme: 'light' };
+      user.settings.hideAds = true;
+      const starsBonus = transaction.starsAwarded ?? 0;
+      if (starsBonus > 0) {
+        const updated = await adjustStars(
+          user._id.toString(),
+          starsBonus,
+          'membership',
             transaction.reference,
             {
               orderId: transaction.razorpayOrderId,

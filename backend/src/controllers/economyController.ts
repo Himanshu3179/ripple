@@ -4,6 +4,7 @@ import Post from '../models/Post';
 import StarLedger from '../models/StarLedger';
 import { adjustStars } from '../services/starService';
 import { POST_BOOST_COST, POST_BOOST_DURATION_HOURS } from '../config/economy';
+import { createNotification } from '../services/notificationService';
 
 export const getLedger = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -62,6 +63,19 @@ export const sendTip = async (req: Request, res: Response, next: NextFunction) =
       senderId: req.user._id,
       postId,
       message,
+    });
+
+    await createNotification({
+      userId: recipientId,
+      type: 'tip-received',
+      title: 'You received a tip!',
+      body: `${req.user.displayName} sent you ${stars} Stars${postId ? ' on your post' : ''}.`,
+      metadata: {
+        senderId: req.user._id,
+        stars,
+        postId,
+        message,
+      },
     });
 
     res.status(200).json({ message: 'Tip sent' });

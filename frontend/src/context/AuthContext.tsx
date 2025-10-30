@@ -23,6 +23,9 @@ interface AuthContextValue {
   token: string | null;
   initialized: boolean;
   isAuthenticated: boolean;
+  isPremium: boolean;
+  isUnlimited: boolean;
+  isAdmin: boolean;
   login: (credentials: LoginPayload) => Promise<AuthenticatedUser>;
   register: (payload: RegisterPayload) => Promise<AuthenticatedUser>;
   logout: () => Promise<void>;
@@ -67,7 +70,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (storedUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          const parsed: AuthenticatedUser = {
+            role: 'user',
+            ...JSON.parse(storedUser),
+          };
+          setUser(parsed);
         } catch (error) {
           console.error('Failed to parse stored user', error);
           localStorage.removeItem('codex_user');
@@ -182,6 +189,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       token,
       initialized,
       isAuthenticated: Boolean(user && token),
+      isPremium: Boolean(user && (user.membershipTier === 'star-pass' || user.membershipTier === 'star-unlimited')),
+      isUnlimited: Boolean(user && user.membershipTier === 'star-unlimited'),
+      isAdmin: Boolean(user && user.role === 'admin'),
       login,
       register,
       logout,

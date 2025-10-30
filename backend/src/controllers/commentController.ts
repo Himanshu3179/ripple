@@ -2,6 +2,10 @@ import { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import Comment, { ICommentDocument } from '../models/Comment';
 import Post from '../models/Post';
+import { isCommunityAccessible, loadMembershipMap, toCommunitySummary } from '../services/communityAccess';
+import CommunitySettings from '../models/CommunitySettings';
+import { recordMissionProgress } from '../services/missionService';
+import { checkSpamSubmission } from '../services/spamService';
 
 interface SerializedAuthor {
   id: string;
@@ -117,12 +121,49 @@ const buildCommentTree = (comments: ICommentDocument[], viewerId?: string): Seri
   return roots;
 };
 
+const verifyPostAccess = async (postId: string, viewerId?: string) => {
+  if (!Types.ObjectId.isValid(postId)) {
+    return { error: 'invalid' as const };
+  }
+
+  const post = await Post.findById(postId).populate('community', 'name slug visibility');
+
+  if (!post) {
+    return { error: 'not-found' as const };
+  }
+
+  const summary = toCommunitySummary(post.community);
+  const membershipMap = await loadMembershipMap(
+    summary ? [summary._id.toString()] : [],
+    viewerId,
+  );
+
+  if (!isCommunityAccessible(summary, membershipMap, viewerId)) {
+    return { error: 'forbidden' as const };
+  }
+
+  return { post };
+};
+
 export const getCommentsForPost = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { postId } = req.params;
 
     if (!Types.ObjectId.isValid(postId)) {
       res.status(400).json({ message: 'Invalid post id' });
+      return;
+    }
+
+    const access = await verifyPostAccess(postId, req.user?._id?.toString());
+
+    if ('error' in access) {
+      if (access.error === 'invalid') {
+        res.status(400).json({ message: 'Invalid post id' });
+      } else if (access.error === 'not-found') {
+        res.status(404).json({ message: 'Post not found' });
+      } else {
+        res.status(403).json({ message: 'You do not have access to this post' });
+      }
       return;
     }
 
@@ -155,8 +196,27 @@ export const addCommentToPost = async (req: Request, res: Response, next: NextFu
       return;
     }
 
-    if (!Types.ObjectId.isValid(postId)) {
-      res.status(400).json({ message: 'Invalid post id' });
+    const access = await verifyPostAccess(postId, req.user._id.toString());
+
+    if ('error' in access) {
+      if (access.error === 'invalid') {
+        res.status(400).json({ message: 'Invalid post id' });
+      } else if (access.error === 'not-found') {
+        res.status(404).json({ message: 'Post not found' });
+      } else {
+        res.status(403).json({ message: 'You do not have access to this post' });
+      }
+      return;
+    }
+
+    const spamCheck = checkSpamSubmission({
+      type: 'comment',
+      userId: req.user._id.toString(),
+      content: body,
+    });
+
+    if (!spamCheck.allowed) {
+      res.status(429).json({ message: spamCheck.message });
       return;
     }
 
@@ -183,10 +243,19 @@ export const addCommentToPost = async (req: Request, res: Response, next: NextFu
       ancestors = [...parentComment.ancestors, parentComment._id];
     }
 
+    const settings = await CommunitySettings.findOne({ community: access.post.community }).lean();
+    const text = body.trim();
+    if (settings?.bannedKeywords?.length) {
+      if (settings.bannedKeywords.some((word) => text.toLowerCase().includes(word.toLowerCase()))) {
+        res.status(400).json({ message: 'Comment contains banned keywords' });
+        return;
+      }
+    }
+
     const comment = await Comment.create({
       post: new Types.ObjectId(postId),
       author: req.user._id,
-      body: body.trim(),
+      body: text,
       parentComment: parentId ? new Types.ObjectId(parentId) : null,
       ancestors,
       isDeleted: false,
@@ -196,6 +265,8 @@ export const addCommentToPost = async (req: Request, res: Response, next: NextFu
 
     await comment.populate('author', 'username displayName avatarColor');
     await Post.findByIdAndUpdate(postId, { $inc: { commentCount: 1 } }).exec();
+
+    await recordMissionProgress(req.user._id.toString(), 'comment');
 
     res
       .status(201)
@@ -227,6 +298,18 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
 
     if (!comment) {
       res.status(404).json({ message: 'Comment not found' });
+      return;
+    }
+
+    const access = await verifyPostAccess(comment.post.toString(), req.user._id.toString());
+    if ('error' in access) {
+      if (access.error === 'forbidden') {
+        res.status(403).json({ message: 'You do not have access to this post' });
+      } else if (access.error === 'not-found') {
+        res.status(404).json({ message: 'Post not found' });
+      } else {
+        res.status(400).json({ message: 'Invalid post id' });
+      }
       return;
     }
 
@@ -277,6 +360,18 @@ export const deleteComment = async (req: Request, res: Response, next: NextFunct
 
     if (!comment) {
       res.status(404).json({ message: 'Comment not found' });
+      return;
+    }
+
+    const access = await verifyPostAccess(comment.post.toString(), req.user._id.toString());
+    if ('error' in access) {
+      if (access.error === 'forbidden') {
+        res.status(403).json({ message: 'You do not have access to this post' });
+      } else if (access.error === 'not-found') {
+        res.status(404).json({ message: 'Post not found' });
+      } else {
+        res.status(400).json({ message: 'Invalid post id' });
+      }
       return;
     }
 
@@ -331,6 +426,18 @@ export const voteOnComment = async (req: Request, res: Response, next: NextFunct
 
     if (!comment) {
       res.status(404).json({ message: 'Comment not found' });
+      return;
+    }
+
+    const access = await verifyPostAccess(comment.post.toString(), req.user._id.toString());
+    if ('error' in access) {
+      if (access.error === 'forbidden') {
+        res.status(403).json({ message: 'You do not have access to this post' });
+      } else if (access.error === 'not-found') {
+        res.status(404).json({ message: 'Post not found' });
+      } else {
+        res.status(400).json({ message: 'Invalid post id' });
+      }
       return;
     }
 

@@ -2,6 +2,9 @@ import { NextFunction, Request, Response } from 'express';
 import User from '../models/User';
 import ReferralLedger from '../models/ReferralLedger';
 import { generateReferralCode } from '../utils/referralCode';
+import { recordReferralMission } from '../services/missionService';
+import { adjustStars } from '../services/starService';
+import { createNotification } from '../services/notificationService';
 
 const SIGNUP_REWARD = 50;
 const SUBSCRIPTION_REWARD = 200;
@@ -70,9 +73,15 @@ export const claimReferralRewards = async (req: Request, res: Response, next: Ne
     });
     await Promise.all(pendingRewards.map((entry) => entry.save()));
 
-    user.starsBalance = (user.starsBalance ?? 0) + totalStars;
+    const updated = await adjustStars(
+      user._id.toString(),
+      totalStars,
+      'referral',
+      'referral-claim',
+    );
     user.referral = user.referral || { code: generateReferralCode(), invitedCount: 0, rewardsClaimed: 0 };
     user.referral.rewardsClaimed = (user.referral.rewardsClaimed ?? 0) + pendingRewards.length;
+    user.starsBalance = updated.starsBalance;
     await user.save();
 
     res.status(200).json({
@@ -86,20 +95,59 @@ export const claimReferralRewards = async (req: Request, res: Response, next: Ne
 };
 
 export const recordSubscriptionReferral = async (referrerId: string, inviteeId: string) => {
-  await ReferralLedger.create({
+  const ledgerEntry = await ReferralLedger.create({
     referrer: referrerId,
     invitee: inviteeId,
     rewardStars: SUBSCRIPTION_REWARD,
     rewardType: 'subscription',
   });
+  await recordReferralMission(referrerId);
+
+  const invitee = await User.findById(inviteeId).select('displayName username').lean();
+
+  await createNotification({
+    userId: referrerId,
+    type: 'referral-subscription',
+    title: 'Referral unlocked a bonus',
+    body: invitee
+      ? `${invitee.displayName ?? invitee.username} upgraded their membership. Claim ${SUBSCRIPTION_REWARD} bonus Stars!`
+      : `One of your referrals upgraded their membership. Claim ${SUBSCRIPTION_REWARD} bonus Stars!`,
+    metadata: {
+      ledgerId: ledgerEntry._id,
+      inviteeId,
+    },
+  });
 };
 
 export const recordSignupReferral = async (referrerId: string, inviteeId?: string, inviteeEmail?: string) => {
-  await ReferralLedger.create({
+  const ledgerEntry = await ReferralLedger.create({
     referrer: referrerId,
     invitee: inviteeId,
     inviteeEmail,
     rewardStars: SIGNUP_REWARD,
     rewardType: 'signup',
+  });
+  await recordReferralMission(referrerId);
+
+  let inviteeLabel: string | null = null;
+  if (inviteeId) {
+    const invitee = await User.findById(inviteeId).select('displayName username').lean();
+    inviteeLabel = invitee?.displayName ?? invitee?.username ?? null;
+  } else if (inviteeEmail) {
+    inviteeLabel = inviteeEmail;
+  }
+
+  await createNotification({
+    userId: referrerId,
+    type: 'referral-signup',
+    title: 'Your invite joined Ripple',
+    body: inviteeLabel
+      ? `${inviteeLabel} just signed up with your link. Earned ${SIGNUP_REWARD} Stars!`
+      : `A new member joined Ripple with your link. Earned ${SIGNUP_REWARD} Stars!`,
+    metadata: {
+      ledgerId: ledgerEntry._id,
+      inviteeId,
+      inviteeEmail,
+    },
   });
 };
