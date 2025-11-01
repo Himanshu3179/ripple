@@ -9,15 +9,27 @@ sudo apt-get update
 sudo apt-get upgrade -y
 
 # Install Docker if not installed
-if ! command -v docker &> /dev/null; then
+if ! command -v docker &> /dev/null && ! command -v /usr/bin/docker &> /dev/null; then
   echo "🐳 Installing Docker..."
   curl -fsSL https://get.docker.com -o get-docker.sh
   sudo sh get-docker.sh
   sudo usermod -aG docker $USER
   rm get-docker.sh
   echo "✅ Docker installed"
+  # Note: User needs to log out/in for group membership, so use sudo docker as fallback
 else
   echo "✅ Docker already installed"
+fi
+
+# Ensure user is in docker group (may require logout/login to take effect)
+if ! groups | grep -q docker; then
+  echo "⚠️  Adding user to docker group (requires logout/login to take effect)"
+  sudo usermod -aG docker $USER
+fi
+
+# Add Docker to PATH if not already there
+if ! echo "$PATH" | grep -q "/usr/bin"; then
+  export PATH="/usr/bin:$PATH"
 fi
 
 # Install Docker Compose if not installed

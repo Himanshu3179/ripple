@@ -85,6 +85,12 @@ jobs:
             if [ ! -f ~/.ripple-setup-complete ]; then
               ./setup-env.sh
               touch ~/.ripple-setup-complete
+              echo "⚠️  Docker group membership updated. Using sudo docker for this session."
+            fi
+            
+            # Ensure Docker is accessible (use sudo if needed)
+            if ! command -v docker &> /dev/null && ! command -v /usr/bin/docker &> /dev/null; then
+              echo "⚠️  Docker not in PATH, will use sudo docker"
             fi
             
             # Deploy application
@@ -104,11 +110,32 @@ jobs:
           port: ${{ secrets.EC2_PORT || 22 }}
           script: |
             sleep 5
+            
+            # Find docker command (try docker, then /usr/bin/docker, then sudo docker)
+            DOCKER_CMD="docker"
+            if ! command -v docker &> /dev/null; then
+              if [ -f /usr/bin/docker ] || [ -x /usr/bin/docker ]; then
+                DOCKER_CMD="/usr/bin/docker"
+              else
+                DOCKER_CMD="sudo docker"
+              fi
+            fi
+            
+            # Test if docker command works
+            if ! $DOCKER_CMD --version &> /dev/null 2>&1; then
+              if sudo docker --version &> /dev/null 2>&1; then
+                DOCKER_CMD="sudo docker"
+              fi
+            fi
+            
             if curl -f http://localhost:4000/api/health > /dev/null 2>&1; then
               echo "✅ Health check passed!"
             else
               echo "❌ Health check failed!"
-              docker logs ${{ env.APP_NAME }} --tail 50
+              echo "📋 Container status:"
+              $DOCKER_CMD ps -a 2>/dev/null | grep ${{ env.APP_NAME }} || echo "Could not check container status"
+              echo "📋 Recent logs:"
+              $DOCKER_CMD logs ${{ env.APP_NAME }} --tail 50 2>&1 || echo "Could not retrieve logs"
               exit 1
             fi
 
