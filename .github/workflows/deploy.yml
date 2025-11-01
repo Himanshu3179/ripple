@@ -89,31 +89,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          source: ".github/deploy/deploy.sh"
-          target: "~/ripple-deploy/deploy.sh"
-          rm: false
-
-      - name: Copy Nginx setup script
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
-          source: ".github/deploy/setup-nginx.sh"
-          target: "~/ripple-deploy/setup-nginx.sh"
-          rm: false
-
-      - name: Copy environment setup script
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
-          source: ".github/deploy/setup-env.sh"
-          target: "~/ripple-deploy/setup-env.sh"
-          rm: false
+          source: ".github/deploy/*"
+          target: "~/ripple-deploy"
+          strip_components: 2
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -143,15 +121,42 @@ jobs:
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             EOF
 
-            # Make scripts executable (they should exist from SCP)
-            if [ -f deploy.sh ]; then
-              chmod +x deploy.sh setup-nginx.sh setup-env.sh
-            else
-              echo "❌ Deployment scripts not found! Files should have been copied by SCP step."
-              echo "📋 Contents of ~/ripple-deploy:"
-              ls -la ~/ripple-deploy || true
-              exit 1
+            # Fix SCP issue: files might have been copied as directories
+            # Find and move actual files from any subdirectories
+            DEPLOY_FILE=$(find . -name "deploy.sh" -type f ! -path "*/.*" | head -1)
+            if [ -n "$DEPLOY_FILE" ] && [ "$DEPLOY_FILE" != "./deploy.sh" ]; then
+              mv "$DEPLOY_FILE" ./deploy.sh 2>/dev/null || true
             fi
+
+            NGINX_FILE=$(find . -name "setup-nginx.sh" -type f ! -path "*/.*" | head -1)
+            if [ -n "$NGINX_FILE" ] && [ "$NGINX_FILE" != "./setup-nginx.sh" ]; then
+              mv "$NGINX_FILE" ./setup-nginx.sh 2>/dev/null || true
+            fi
+
+            ENV_FILE=$(find . -name "setup-env.sh" -type f ! -path "*/.*" | head -1)
+            if [ -n "$ENV_FILE" ] && [ "$ENV_FILE" != "./setup-env.sh" ]; then
+              mv "$ENV_FILE" ./setup-env.sh 2>/dev/null || true
+            fi
+
+            # Remove any directories that were created instead of files
+            rm -rf deploy.sh/ setup-nginx.sh/ setup-env.sh/ 2>/dev/null || true
+
+            # Verify files exist and make executable
+            for script in deploy.sh setup-nginx.sh setup-env.sh; do
+              if [ -f "$script" ]; then
+                chmod +x "$script"
+                echo "✅ Found $script"
+              else
+                echo "❌ Error: $script not found!"
+                echo "📋 Current directory contents:"
+                ls -la
+                echo "📋 Searching for scripts:"
+                find . -name "$script" -type f
+                exit 1
+              fi
+            done
+
+            echo "✅ All deployment scripts are ready"
 
             # Find docker command
             DOCKER_CMD="docker"
