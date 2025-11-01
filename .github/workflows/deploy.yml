@@ -53,6 +53,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
           script: |
+            # Clean up old deployment directory to prevent tar errors
+            rm -rf ~/ripple-deploy
+
             # Create deployment directory
             mkdir -p ~/ripple-deploy
 
