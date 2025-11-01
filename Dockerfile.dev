@@ -1,0 +1,18 @@
+# Development image for Ripple (serves frontend and backend together)
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY backend/package*.json backend/
+COPY frontend/package*.json frontend/
+
+RUN cd backend && npm install \
+  && cd ../frontend && npm install
+
+COPY docker/dev-entrypoint.sh ./dev-entrypoint.sh
+RUN chmod +x dev-entrypoint.sh
+
+EXPOSE 4000 5173
+
+CMD ["./dev-entrypoint.sh"]

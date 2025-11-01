@@ -59,6 +59,8 @@ OPENAI_API_KEY=sk-your-openai-key (optional – enables live Starforge drafts)
 
 `frontend/.env`
 ```
+# Optional when running outside Docker. The app defaults to `/api` which
+# works with the Docker proxy and production build.
 VITE_API_URL=http://localhost:4000
 ```
 
@@ -126,3 +128,81 @@ All protected routes use `Authorization: Bearer <token>` headers.
 - MongoDB indices are auto-managed; ensure the configured database is reachable before running the server
 
 Enjoy building on Ripple! Contributions and customizations welcome.
+
+---
+
+## 🚀 Automated Deployment (CI/CD)
+
+Ripple includes automated deployment to AWS EC2 using GitHub Actions. Every push to `main` automatically:
+
+- ✅ Builds and pushes Docker image to Docker Hub
+- ✅ Deploys to EC2 instance
+- ✅ Configures Nginx reverse proxy
+- ✅ Sets up SSL with Let's Encrypt (if domain provided)
+- ✅ Runs health checks
+
+### Quick Setup
+
+1. **Configure GitHub Secrets** (see [DEPLOYMENT.md](.github/DEPLOYMENT.md))
+   - EC2 connection details
+   - Docker Hub credentials
+   - Application secrets (MongoDB, JWT, etc.)
+
+2. **Push to main branch:**
+   ```bash
+   git push origin main
+   ```
+
+3. **Monitor deployment:**
+   - Check GitHub Actions tab in your repository
+   - View logs and deployment status
+
+### Documentation
+
+- 📘 [Full Deployment Guide](.github/DEPLOYMENT.md) - Complete setup instructions
+- 🔐 [Secrets Setup Guide](.github/SECRETS_SETUP.md) - Quick reference for GitHub Secrets
+
+### Cost Optimization
+
+- Uses existing EC2 instance (no creation costs)
+- Free tier eligible (t2.micro/t3.micro)
+- Docker Hub free tier
+- Automatic cleanup of old Docker images
+
+---
+
+## Docker Workflow
+
+### Development (hot reload)
+
+1. Build the dev image and start the single container:
+   ```bash
+   docker compose up --build
+   ```
+
+2. Visit `http://localhost:5173` (frontend) and `http://localhost:4000/api/health` (API).
+
+   The container runs both Vite and the Express API together, proxies `/api` requests, and
+   watches your local `frontend/` and `backend/` directories for real-time updates.
+
+   Environment variables are pre-configured in `docker-compose.yml`. Edit the file if you
+   need to point at a different database or tweak ports.
+
+### Production Image
+
+1. Build the production image:
+   ```bash
+   docker build -t ripple-app .
+   ```
+
+2. Run the container (make sure MongoDB is reachable via `MONGO_URI`):
+   ```bash
+   docker run -p 4000:4000 \
+     -e MONGO_URI="your-mongo-uri" \
+     -e JWT_SECRET="your-secret" \
+     ripple-app
+   ```
+
+   The production image runs the compiled Express server and serves the React build from
+   the same port (`/api/*` for JSON, everything else falls back to `index.html`). No extra
+   CORS configuration is required.

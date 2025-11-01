@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ripple:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - '4000:4000'
+      - '5173:5173'
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      CLIENT_URL: http://localhost:5173
+      VITE_API_URL: /api
+      VITE_API_PROXY_TARGET: http://localhost:4000
+      CHOKIDAR_USEPOLLING: '1'
+      FRONTEND_PORT: 5173
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - backend_node_modules:/app/backend/node_modules
+      - frontend_node_modules:/app/frontend/node_modules
+    command: ["./dev-entrypoint.sh"]
+
+volumes:
+  backend_node_modules:
+  frontend_node_modules:

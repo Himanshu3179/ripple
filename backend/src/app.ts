@@ -2,6 +2,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import fs from 'fs';
 import authRoutes from './routes/authRoutes';
 import postRoutes from './routes/postRoutes';
 import commentRoutes from './routes/commentRoutes';
@@ -62,6 +64,19 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/storyverse', storyverseRoutes);
+
+const staticDir = path.join(__dirname, 'public');
+if (fs.existsSync(staticDir)) {
+  app.use(express.static(staticDir));
+  
+  // Catch-all handler for SPA routing (Express 5 compatible)
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
