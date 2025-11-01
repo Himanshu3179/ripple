@@ -14,7 +14,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,6 +45,43 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
+      - name: Setup EC2 environment and install Docker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            # Create deployment directory
+            mkdir -p ~/ripple-deploy
+
+            # Install Docker if not installed
+            if ! command -v docker &> /dev/null && ! command -v /usr/bin/docker &> /dev/null; then
+              echo "🐳 Installing Docker..."
+              curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+              sudo sh /tmp/get-docker.sh
+              sudo usermod -aG docker $USER
+              rm /tmp/get-docker.sh
+              echo "✅ Docker installed"
+            else
+              echo "✅ Docker already installed"
+            fi
+
+            # Ensure user is in docker group
+            if ! groups | grep -q docker; then
+              sudo usermod -aG docker $USER
+              echo "⚠️  Added user to docker group (may require logout/login)"
+            fi
+
+            # Install Docker Compose if needed
+            if ! command -v docker-compose &> /dev/null; then
+              echo "🐳 Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              echo "✅ Docker Compose installed"
+            fi
+
       - name: Copy deployment files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -52,8 +89,31 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          source: ".github/deploy/*"
-          target: "~/ripple-deploy"
+          source: ".github/deploy/deploy.sh"
+          target: "~/ripple-deploy/deploy.sh"
+          rm: false
+
+      - name: Copy Nginx setup script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          source: ".github/deploy/setup-nginx.sh"
+          target: "~/ripple-deploy/setup-nginx.sh"
+          rm: false
+
+      - name: Copy environment setup script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          source: ".github/deploy/setup-env.sh"
+          target: "~/ripple-deploy/setup-env.sh"
+          rm: false
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -63,8 +123,13 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
           script: |
-            cd ~/ripple-deploy
-            
+            # Ensure we're in the deployment directory
+            cd ~/ripple-deploy || { echo "❌ Deployment directory not found!"; exit 1; }
+
+            # List files to debug
+            echo "📁 Files in deployment directory:"
+            ls -la || echo "Directory is empty or doesn't exist"
+
             # Create .env file from secrets
             cat > .env.production << EOF
             PORT=4000
@@ -77,28 +142,55 @@ jobs:
             RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             EOF
-            
-            # Make scripts executable
-            chmod +x deploy.sh setup-nginx.sh setup-env.sh
-            
-            # Run setup if first time
+
+            # Make scripts executable (they should exist from SCP)
+            if [ -f deploy.sh ]; then
+              chmod +x deploy.sh setup-nginx.sh setup-env.sh
+            else
+              echo "❌ Deployment scripts not found! Files should have been copied by SCP step."
+              echo "📋 Contents of ~/ripple-deploy:"
+              ls -la ~/ripple-deploy || true
+              exit 1
+            fi
+
+            # Find docker command
+            DOCKER_CMD="docker"
+            if ! command -v docker &> /dev/null; then
+              if [ -f /usr/bin/docker ] || [ -x /usr/bin/docker ]; then
+                DOCKER_CMD="/usr/bin/docker"
+              else
+                DOCKER_CMD="sudo docker"
+              fi
+            fi
+
+            # Test docker
+            if ! $DOCKER_CMD --version &> /dev/null 2>&1; then
+              if sudo docker --version &> /dev/null 2>&1; then
+                DOCKER_CMD="sudo docker"
+              else
+                echo "❌ Docker is not available. Please ensure Docker is installed."
+                exit 1
+              fi
+            fi
+
+            echo "🐳 Using Docker command: $DOCKER_CMD"
+            $DOCKER_CMD --version
+
+            # Run setup if first time (for firewall, log rotation, etc.)
             if [ ! -f ~/.ripple-setup-complete ]; then
-              ./setup-env.sh
+              echo "🔧 Running first-time setup..."
+              ./setup-env.sh || true  # Don't fail if some steps fail
               touch ~/.ripple-setup-complete
-              echo "⚠️  Docker group membership updated. Using sudo docker for this session."
             fi
-            
-            # Ensure Docker is accessible (use sudo if needed)
-            if ! command -v docker &> /dev/null && ! command -v /usr/bin/docker &> /dev/null; then
-              echo "⚠️  Docker not in PATH, will use sudo docker"
-            fi
-            
+
             # Deploy application
+            echo "🚀 Deploying application..."
             ./deploy.sh ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-            
+
             # Setup/update Nginx if needed
+            echo "🔧 Setting up Nginx..."
             ./setup-nginx.sh ${{ secrets.DOMAIN || '' }}
-            
+
             echo "✅ Deployment completed successfully!"
 
       - name: Health check
@@ -110,7 +202,7 @@ jobs:
           port: ${{ secrets.EC2_PORT || 22 }}
           script: |
             sleep 5
-            
+
             # Find docker command (try docker, then /usr/bin/docker, then sudo docker)
             DOCKER_CMD="docker"
             if ! command -v docker &> /dev/null; then
@@ -120,14 +212,14 @@ jobs:
                 DOCKER_CMD="sudo docker"
               fi
             fi
-            
+
             # Test if docker command works
             if ! $DOCKER_CMD --version &> /dev/null 2>&1; then
               if sudo docker --version &> /dev/null 2>&1; then
                 DOCKER_CMD="sudo docker"
               fi
             fi
-            
+
             if curl -f http://localhost:4000/api/health > /dev/null 2>&1; then
               echo "✅ Health check passed!"
             else
@@ -138,4 +230,3 @@ jobs:
               $DOCKER_CMD logs ${{ env.APP_NAME }} --tail 50 2>&1 || echo "Could not retrieve logs"
               exit 1
             fi
-
