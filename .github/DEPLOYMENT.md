@@ -39,10 +39,12 @@ Add the following secrets:
 
 ### Optional Secrets
 
-| Secret Name      | Description                      |
-| ---------------- | -------------------------------- | ------------- |
-| `DOMAIN`         | Your domain name (for SSL setup) | `example.com` |
-| `OPENAI_API_KEY` | OpenAI API key for AI features   | `sk-...`      |
+| Secret Name      | Description                                  | Example                      |
+| ---------------- | -------------------------------------------- | ---------------------------- |
+| `DOMAIN`         | Your domain name (for SSL setup)             | `example.com`                |
+| `GEMINI_API_KEY` | Gemini API key for AI features (default)     | `your-gemini-api-key`        |
+| `OPENAI_API_KEY` | OpenAI API key for AI features (fallback)    | `sk-...`                     |
+| `AI_PROVIDER`    | AI provider to use: 'gemini' or 'openai'     | `gemini` (default)           |
 
 ## 🔑 Generating SSH Key for EC2
 

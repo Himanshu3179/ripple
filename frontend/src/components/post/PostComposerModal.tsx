@@ -23,8 +23,8 @@ const PostComposerModal = ({ open, onClose, seedTopic, seedCommunity }: PostComp
     }
   }, [open, seedTopic]);
 
-  const handleApplyAiDraft = (title: string, body: string) => {
-    setPrefill((prev) => ({ ...prev, title, body }));
+  const handleApplyAiDraft = (title: string, body: string, topic: string) => {
+    setPrefill((prev) => ({ ...prev, title, body, topic }));
   };
 
   return (

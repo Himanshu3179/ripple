@@ -103,6 +103,7 @@ export const generatePost = async (req: Request, res: Response, next: NextFuncti
     res.status(200).json({
       title: result.title,
       body: result.body,
+      topic: result.topic,
       remainingQuota: quota.limit < 0 ? null : Math.max(quota.limit - quota.used, 0),
       renewsAt: quota.renewsAt,
     });

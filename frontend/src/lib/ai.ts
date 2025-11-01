@@ -10,6 +10,7 @@ export const composePost = async (payload: AiComposePayload) => {
   const { data } = await api.post<{
     title: string;
     body: string;
+    topic: string;
     remainingQuota: number | null;
     renewsAt: string;
   }>('/ai/compose', payload);

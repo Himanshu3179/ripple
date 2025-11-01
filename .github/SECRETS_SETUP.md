@@ -38,7 +38,9 @@ RAZORPAY_WEBHOOK_SECRET = your_webhook_secret
 
 ```
 DOMAIN = yourdomain.com          # For automatic SSL setup
-OPENAI_API_KEY = sk-xxxxx        # For AI features
+GEMINI_API_KEY = your-gemini-api-key  # For AI features (default provider)
+OPENAI_API_KEY = sk-xxxxx        # For AI features (optional fallback)
+AI_PROVIDER = gemini             # Choose 'gemini' or 'openai' (default: 'gemini')
 ```
 
 ## Quick Setup Commands

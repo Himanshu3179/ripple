@@ -8,7 +8,7 @@ import useAuth from '../../hooks/useAuth';
 interface AiComposerModalProps {
   open: boolean;
   onClose: () => void;
-  onApply: (title: string, body: string) => void;
+  onApply: (title: string, body: string, topic: string) => void;
 }
 
 const toneOptions = ['Inspiring', 'Playful', 'Analytical', 'Casual', 'Bold'];
@@ -22,7 +22,7 @@ const AiComposerModal = ({ open, onClose, onApply }: AiComposerModalProps) => {
   const { mutateAsync, isPending } = useMutation({
     mutationFn: composePost,
     onSuccess: (data) => {
-      onApply(data.title, data.body);
+      onApply(data.title, data.body, data.topic);
       toast.success('Starforge draft ready!');
       void refreshAccount();
       onClose();
