@@ -92,6 +92,7 @@ jobs:
           source: ".github/deploy/*"
           target: "~/ripple-deploy"
           strip_components: 2
+          overwrite: true
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
