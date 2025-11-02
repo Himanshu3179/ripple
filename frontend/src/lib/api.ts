@@ -22,7 +22,10 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      setAuthToken(null);
+      const failedUrl = error.config?.url || '';
+      if (failedUrl.endsWith('/auth/me')) {
+        setAuthToken(null);
+      }
     }
     return Promise.reject(error);
   },

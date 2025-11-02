@@ -14,7 +14,6 @@ const CommunitiesPage = () => {
   const { create, join } = useCommunityActions();
   const [formState, setFormState] = useState({ name: '', description: '', visibility: 'public' });
   const [joinState, setJoinState] = useState({ identifier: '', inviteCode: '' });
-
   const handleCreate = (event: FormEvent) => {
     event.preventDefault();
     if (!formState.name.trim()) {

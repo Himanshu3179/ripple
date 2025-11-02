@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/layout/Layout';
+import ProtectedRoute from './components/common/ProtectedRoute';
 import HomePage from './pages/home/HomePage';
 import PostPage from './pages/post/PostPage';
 import LoginPage from './pages/auth/LoginPage';
@@ -24,16 +25,23 @@ const App = (): ReactElement => {
         <Route path="/posts/:postId" element={<PostPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/store" element={<StorePage />} />
-        <Route path="/communities" element={<CommunitiesPage />} />
-        <Route path="/communities/:identifier" element={<CommunityDetailPage />} />
-        <Route path="/missions" element={<MissionsPage />} />
-        <Route path="/referrals" element={<ReferralPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/schedule" element={<SchedulePage />} />
-        <Route path="/storyverse" element={<StoryverseListPage />} />
-        <Route path="/storyverse/:storyId" element={<StoryverseDetailPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/store" element={<StorePage />} />
+          <Route path="/communities" element={<CommunitiesPage />} />
+          <Route path="/missions" element={<MissionsPage />} />
+          <Route path="/communities/:identifier" element={<CommunityDetailPage />} />
+          <Route path="/referrals" element={<ReferralPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/schedule" element={<SchedulePage />} />
+          <Route path="/storyverse" element={<StoryverseListPage />} />
+          <Route path="/storyverse/:storyId" element={<StoryverseDetailPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute adminOnly={true} />}>
+          <Route path="/admin" element={<AdminPage />} />
+        </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
