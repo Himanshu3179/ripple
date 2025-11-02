@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
@@ -14,6 +14,7 @@ import BoostButton from '../../components/economy/BoostButton';
 import TipButton from '../../components/economy/TipButton';
 import ReportButton from '../../components/common/ReportButton';
 import useAuth from '../../hooks/useAuth';
+import MarkdownRenderer from '../../components/common/MarkdownRenderer';
 
 const PostPage = () => {
   const params = useParams<{ postId?: string }>();
@@ -52,6 +53,12 @@ const PostPage = () => {
   const comments = commentsData || [];
   const shouldShowSkeleton = postLoading && !post;
   const { isAuthenticated } = useAuth();
+
+
+  // Scroll to top when postId changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [postId]);
 
   const readingTime = useMemo(() => {
     if (!post?.body) {
@@ -141,7 +148,26 @@ const PostPage = () => {
             )}
           </div>
 
-          <h1 className="text-3xl font-bold leading-tight text-slate-900 md:text-4xl">{post.title}</h1>
+          <h1 className="text-3xl font-bold leading-tight text-slate-900 md:text-4xl">
+            <MarkdownRenderer
+              content={post.title}
+              components={{
+                // Remove paragraph wrapper
+                p: ({ children }) => <>{children}</>,
+                // Make all 
+                // ings render as inline text (same font size as h1 title)
+                h1: ({ children }) => <span>{children}</span>,
+                h2: ({ children }) => <span>{children}</span>,
+                h3: ({ children }) => <span>{children}</span>,
+                h4: ({ children }) => <span>{children}</span>,
+                h5: ({ children }) => <span>{children}</span>,
+                h6: ({ children }) => <span>{children}</span>,
+                // Keep other markdown features (bold, italic, etc.)
+                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                em: ({ children }) => <em className="italic">{children}</em>,
+              }}
+            />
+          </h1>
 
           {post.imageUrl && (
             <img
@@ -153,9 +179,7 @@ const PostPage = () => {
 
           {post.body && (
             <div className="prose prose-slate max-w-none text-lg leading-relaxed">
-              {post.body.split('\n').map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
+              <MarkdownRenderer content={post.body} />
             </div>
           )}
 

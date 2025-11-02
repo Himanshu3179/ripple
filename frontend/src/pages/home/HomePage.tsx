@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { HiOutlineSparkles } from 'react-icons/hi2';
 import clsx from 'clsx';
-import PostComposerModal from '../../components/post/PostComposerModal';
 import PostCard from '../../components/post/PostCard';
 import api from '../../lib/api';
 import useAuth from '../../hooks/useAuth';
@@ -54,17 +53,7 @@ const HomePage = () => {
   const query = searchParams.get('q') || '';
   const community = searchParams.get('community') || '';
   const { isAuthenticated } = useAuth();
-  const [isComposerOpen, setComposerOpen] = useState(false);
-  const [seedTopic, setSeedTopic] = useState('');
 
-  useEffect(() => {
-    const listener = () => {
-      setSeedTopic('');
-      setComposerOpen(true);
-    };
-    window.addEventListener('open-post-composer', listener);
-    return () => window.removeEventListener('open-post-composer', listener);
-  }, []);
 
   const { data, isLoading } = useQuery<PostResource[]>({
     queryKey: ['posts', { sort, topic, query, community }],
@@ -116,8 +105,7 @@ const HomePage = () => {
                   navigate('/login');
                   return;
                 }
-                setSeedTopic('');
-                setComposerOpen(true);
+                window.dispatchEvent(new CustomEvent('open-post-composer'));
               }}
               className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
@@ -198,8 +186,7 @@ const HomePage = () => {
                     navigate('/login');
                     return;
                   }
-                  setSeedTopic(item.name);
-                  setComposerOpen(true);
+                  window.dispatchEvent(new CustomEvent('open-post-composer'));
                 }}
                 className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-600"
               >
@@ -237,8 +224,7 @@ const HomePage = () => {
                 navigate('/login');
                 return;
               }
-              setSeedTopic('');
-              setComposerOpen(true);
+              window.dispatchEvent(new CustomEvent('open-post-composer'));
             }}
             className="mt-5 inline-flex rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
           >
@@ -246,12 +232,6 @@ const HomePage = () => {
           </button>
         </section>
       </aside>
-      <PostComposerModal
-        open={isComposerOpen}
-        onClose={() => setComposerOpen(false)}
-        seedTopic={seedTopic}
-        seedCommunity={community || undefined}
-      />
     </div>
   );
 };

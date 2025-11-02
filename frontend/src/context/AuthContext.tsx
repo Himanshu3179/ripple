@@ -61,43 +61,61 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const initialize = async () => {
       const storedToken = getStoredToken();
-      const storedUser = localStorage.getItem('codex_user');
 
-      if (storedToken) {
-        setAuthToken(storedToken);
-        setToken(storedToken);
+      if (!storedToken) {
+        // No token, user is definitely logged out.
+        setInitialized(true);
+        return;
       }
 
+      // We have a token. Set it for the upcoming API call.
+      setAuthToken(storedToken);
+      setToken(storedToken);
+
+      // --- Optional but recommended ---
+      // Load the cached user from localStorage immediately.
+      // This provides a snappy UI, which we will then
+      // verify and update with the /me endpoint.
+      const storedUser = localStorage.getItem('codex_user');
       if (storedUser) {
         try {
           const parsed: AuthenticatedUser = {
-            role: 'user',
+            role: 'user', // Provide a default role or ensure it's in the stored object
             ...JSON.parse(storedUser),
           };
           setUser(parsed);
         } catch (error) {
-          console.error('Failed to parse stored user', error);
-          localStorage.removeItem('codex_user');
+          console.warn('Failed to parse stored user', error);
+          localStorage.removeItem('codex_user'); // Clear corrupted data
         }
       }
+      // --- End Optional ---
 
-      if (storedToken && !storedUser) {
-        try {
-          const { data } = await api.get<{ user: AuthenticatedUser }>('/auth/me');
-          setUser(data.user);
-          persistUser(data.user);
-        } catch (error) {
-          console.error('Failed to fetch current user', error);
-          setAuthToken(null);
-          setToken(null);
-        }
+      try {
+        // ALWAYS verify the token with the backend on load.
+        // This is the single source of truth.
+        const { data } = await api.get<{ user: AuthenticatedUser }>('/auth/me');
+
+        // Success: Token is valid. Update state with fresh user data.
+        setUser(data.user);
+        persistUser(data.user); // Re-persist fresh data
+      } catch (error) {
+        // Failure: Token is invalid, expired, or server is down.
+        console.error('Auth initialization failed', error);
+
+        // Clear all auth state from React and storage.
+        setAuthToken(null);
+        setToken(null);
+        setUser(null);
+        persistUser(null); // This will remove 'codex_user'
+      } finally {
+        // We are done initializing.
+        setInitialized(true);
       }
-
-      setInitialized(true);
     };
 
     initialize();
-  }, []);
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const handleAuthSuccess = (authPayload: AuthResponse) => {
     setToken(authPayload.token);

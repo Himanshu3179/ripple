@@ -11,7 +11,6 @@ import useAuth from '../../hooks/useAuth';
 import TipsPanel from '../../components/economy/TipsPanel';
 import { claimMission } from '../../lib/missions';
 import TipButton from '../../components/economy/TipButton';
-import PostComposerModal from '../../components/post/PostComposerModal';
 
 const CommunityDetailPage = () => {
   const params = useParams<{ identifier: string }>();
@@ -21,7 +20,6 @@ const CommunityDetailPage = () => {
   const { data: posts } = useCommunityPosts(identifier, { sort: 'new' });
   const { data: members } = useCommunityMembers(identifier);
   const { createInvite, join, leave } = useCommunityActions();
-  const [showComposer, setShowComposer] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const { missions, claim } = useMissions();
 
@@ -100,7 +98,7 @@ const CommunityDetailPage = () => {
             {isMember && (
               <button
                 type="button"
-                onClick={() => setShowComposer(true)}
+                onClick={() => window.dispatchEvent(new CustomEvent('open-post-composer'))}
                 className="rounded-xl bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600"
               >
                 New post
@@ -140,13 +138,6 @@ const CommunityDetailPage = () => {
           )}
         </aside>
       </section>
-
-      <PostComposerModal
-        open={showComposer}
-        onClose={() => setShowComposer(false)}
-        seedTopic=""
-        seedCommunity={community.slug}
-      />
     </div>
   );
 };

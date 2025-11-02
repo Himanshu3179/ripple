@@ -7,7 +7,7 @@ import { FiLogIn, FiMenu, FiX } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuth from '../../hooks/useAuth';
 import NotificationBell from './NotificationBell';
-
+import PostComposerModal from '../post/PostComposerModal';
 type SortValue = 'hot' | 'new' | 'top';
 
 const sortTabs: Array<{ label: string; value: SortValue; icon: ComponentType<{ className?: string }> }> = [
@@ -25,7 +25,7 @@ const Header = () => {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-
+  const [isComposerOpen, setComposerOpen] = useState(false);
   const activeSort = useMemo(() => searchParams.get('sort') || 'hot', [searchParams]);
 
   useEffect(() => {
@@ -38,6 +38,14 @@ const Header = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, []);
+
+  useEffect(() => {
+    const listener = () => {
+      setComposerOpen(true);
+    };
+    window.addEventListener('open-post-composer', listener);
+    return () => window.removeEventListener('open-post-composer', listener);
   }, []);
 
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -219,9 +227,9 @@ const Header = () => {
             </form>
           </div>
 
-      <div className="hidden items-center justify-end gap-2 whitespace-nowrap lg:flex">
-        {desktopActions}
-      </div>
+          <div className="hidden items-center justify-end gap-2 whitespace-nowrap lg:flex">
+            {desktopActions}
+          </div>
 
           <div className="flex items-center justify-end gap-2 lg:hidden">
             <NotificationBell enabled={isAuthenticated} className="lg:hidden" menuAlign="right" />
@@ -365,6 +373,7 @@ const Header = () => {
           </div>
         )}
       </div>
+      <PostComposerModal open={isComposerOpen} onClose={() => setComposerOpen(false)} />
     </header>
   );
 };

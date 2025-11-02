@@ -31,7 +31,7 @@ const CommentComposer = ({
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
 
-  const isValid = body.trim().length >= 3;
+  const isValid = body.trim().length > 0 && body.trim().length <= 5000;
 
   const { mutateAsync, isPending } = useMutation<CommentResource, unknown, CreateCommentPayload>({
     mutationFn: async (payload) => {
@@ -89,6 +89,7 @@ const CommentComposer = ({
         onChange={(event) => setBody(event.target.value)}
         placeholder="Share your thoughts..."
         rows={3}
+        maxLength={5000}
         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-400 focus:bg-white focus:shadow-input"
       />
       <div className="mt-3 flex justify-end gap-2">
