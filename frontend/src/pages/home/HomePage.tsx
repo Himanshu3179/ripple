@@ -204,7 +204,7 @@ const HomePage = () => {
                   </span>
                   {item.name}
                 </span>
-                <span className="text-xs uppercase tracking-wide text-slate-400">
+                <span className="text-xs uppercase tracking-wide text-slate-400 ml-3">
                   {item.weight} pts
                 </span>
               </button>
